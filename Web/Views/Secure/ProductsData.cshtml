@@ -1,0 +1,23 @@
+﻿@model Web.Models.ProductData
+
+@{
+    ViewData["Title"] = "ProductsDataAsync";
+}
+
+<h1>Products Data</h1>
+<hr />
+<div>
+    <dl class="row">
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Products)
+        </dt>
+        <dd class="col-sm-10">
+            <ul class="list-group">
+                @foreach (var product in Model.Products)
+                {
+                    <li class="list-group-item">@Html.DisplayFor(model => product)</li>
+                }
+            </ul>
+        </dd>
+    </dl>
+</div>

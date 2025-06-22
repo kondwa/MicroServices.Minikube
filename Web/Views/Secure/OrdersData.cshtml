@@ -1,0 +1,23 @@
+﻿@model Web.Models.OrderData
+
+@{
+    ViewData["Title"] = "Orders Data";
+}
+
+<h1>Orders Data</h1>
+<hr />
+<div>
+    <dl class="row">
+        <dt class="col-sm-2">
+            @Html.DisplayNameFor(model => model.Orders)
+        </dt>
+        <dd class="col-sm-10">
+            <ul class="list-group">
+                @foreach (var order in Model.Orders)
+                {
+                    <li class="list-group-item">@Html.DisplayFor(model => order)</li>
+                }
+            </ul>
+        </dd>
+    </dl>
+</div>

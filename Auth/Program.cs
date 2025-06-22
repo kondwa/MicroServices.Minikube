@@ -2,17 +2,24 @@
 using Auth.Types;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Cryptography;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddHttpContextAccessor();
-var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var rsa = RSA.Create();
-rsa.ImportFromPem(File.ReadAllText("private.pem"));
+builder.Services.AddSingleton<JwtService>();
+builder.Services.AddSingleton<ITokenStore, InMemoryTokenStore>();
+JwtSettings? jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>();
 
-var key = Encoding.UTF8.GetBytes(jwtSettings["Key"] ?? string.Empty);
+string privateKey = "private.pem";
+if (!File.Exists(privateKey))
+{
+    throw new FileNotFoundException($"Private key file '{privateKey}' not found.");
+}
+var rsa = RSA.Create();
+rsa.ImportFromPem(File.ReadAllText(privateKey));
 
 // Add services to the container.
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
@@ -23,8 +30,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
         ValidateAudience = true,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtSettings["Issuer"],
-        ValidAudience = jwtSettings["Audience"],
+        ValidIssuer = jwtSettings?.Issuer,
+        ValidAudience = jwtSettings?.Audience,
         IssuerSigningKey = new RsaSecurityKey(rsa)
     };
     options.Events = new JwtBearerEvents
@@ -43,6 +50,16 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
         {
             Console.WriteLine($"📩 Token received: {context.Token}");
             return Task.CompletedTask;
+        },
+        OnTokenValidated = context =>
+        {
+            var jti = context.Principal?.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
+            var tokenStore = context.HttpContext.RequestServices.GetRequiredService<ITokenStore>();
+            if (string.IsNullOrEmpty(jti) || !tokenStore.IsValid(jti))
+            {
+                context.Fail("Token is invalid or has been revoked.");
+            }
+            return Task.CompletedTask;
         }
     };
 });
@@ -55,32 +72,47 @@ builder.Services.AddSwaggerGen();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-//if (app.Environment.IsDevelopment())
-//{
-app.UseSwagger();
-app.UseSwaggerUI();
-//}
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapPost("/login", (AuthRequest request,IHttpContextAccessor contextAccessor) =>
+app.MapGet("/", () => Results.Ok("Auth API is running")).WithOpenApi();
+
+app.MapPost("/login", (AuthRequest request, IHttpContextAccessor contextAccessor, JwtService jwtService) =>
 {
-    if (request.UserName == "admin" && request.Password == "adminpass") // Replace with your authentication logic
+    var (isValid, role) = Authenticate(request.UserName, request.Password);
+    if (isValid)
     {
-        var jwtService = new JwtService(builder.Configuration,contextAccessor);
-        var token = jwtService.GenerateToken(request.UserName, "Admin"); // Replace with your role logic
-        return Results.Ok(new AuthResponse { Token = token });
-    }
-    else if (request.UserName == "user" && request.Password == "userpass") // Another user example
-    {
-        var jwtService = new JwtService(builder.Configuration,contextAccessor);
-        var token = jwtService.GenerateToken(request.UserName, "User"); // Replace with your role logic
+        var token = jwtService.GenerateToken(request.UserName, role);
         return Results.Ok(new AuthResponse { Token = token });
     }
     return Results.Unauthorized();
 })
-.WithName("Auth")
+.WithName("Login")
 .WithOpenApi();
+app.MapGet("/logout", (IHttpContextAccessor contextAccessor, ITokenStore tokenStore) =>
+{
+    var jti = contextAccessor.HttpContext?.User.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
+    if (!string.IsNullOrEmpty(jti))
+    {
+        tokenStore.Revoke(jti);
+    }
+    contextAccessor.HttpContext?.Response.Cookies.Delete("token");
+    return Results.Ok("Logged out successfully.");
+})
+    .WithName("Logout")
+    .WithOpenApi();
 
 app.Run();
+
+static (bool isValid, string role) Authenticate(string userName, string password) => (userName, password) switch
+{
+    ("admin", "adminpass") => (true, "admin"),
+    ("user", "userpass") => (true, "user"),
+    _ => (false, string.Empty)
+};

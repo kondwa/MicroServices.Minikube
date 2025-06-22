@@ -91,10 +91,13 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 // Endpoints
-app.MapGet("/", UsersAsync);
-app.MapGet("/users", UsersAsync).RequireAuthorization();
-app.MapGet("/orders", OrdersAsync).RequireAuthorization();
+app.MapGet("/", () => Results.Ok("Users API is running")).WithOpenApi();
+app.MapGet("/users", UsersAsync).RequireAuthorization().WithName("Users").WithOpenApi();
+app.MapGet("/orders", OrdersAsync).RequireAuthorization().WithName("Orders").WithOpenApi();
+app.MapGet("/products", ProductsAsync).RequireAuthorization().WithName("Products").WithOpenApi();
+
 app.MapPost("/login", LoginAsync)
+    .WithOpenApi()
     .WithName("Login");
 
 app.Run();
@@ -105,6 +108,19 @@ static async Task<IResult> OrdersAsync(IOrdersAPI ordersAPI)
     {
         var orders = await ordersAPI.GetOrdersAsync();
         return Results.Ok(new { Orders = orders });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message);
+    }
+}
+
+static async Task<IResult> ProductsAsync(IProductsAPI productsAPI)
+{
+    try
+    {
+        var products = await productsAPI.GetProductsAsync();
+        return Results.Ok(new { Products = products });
     }
     catch (Exception ex)
     {

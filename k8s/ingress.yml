@@ -6,6 +6,16 @@ metadata:
     nginx.ingress.kubernetes.io/rewrite-target: /
 spec:
   rules:
+    - host: web.test
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web-mvc
+                port: 
+                  number: 80
     - host: users.test
       http:
         paths:

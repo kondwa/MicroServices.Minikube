@@ -1,13 +1,19 @@
 ﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using Products.Types;
 using System.Security.Cryptography;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var jwtSettings = builder.Configuration.GetSection("JwtSettings");
+JwtSettings? jwtSettings = builder.Configuration.GetSection(nameof(JwtSettings)).Get<JwtSettings>();
 // Add services to the container.
+string publicKey = "public.pem";
+if (!File.Exists(publicKey))
+{
+    throw new FileNotFoundException($"Public key file '{publicKey}' not found.");
+}
 var rsa = RSA.Create();
-rsa.ImportFromPem(File.ReadAllText("public.pem"));
+rsa.ImportFromPem(File.ReadAllText(publicKey));
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
@@ -21,8 +27,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtSettings["Issuer"],
-            ValidAudience = jwtSettings["Audience"],
+            ValidIssuer = jwtSettings?.Issuer,
+            ValidAudience = jwtSettings?.Audience,
             IssuerSigningKey = new RsaSecurityKey(rsa)
         };
         options.Events = new JwtBearerEvents
@@ -60,6 +66,8 @@ app.UseSwaggerUI();
 //}
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.MapGet("/", () => Results.Ok("Products API is running")).WithOpenApi();
 
 app.MapGet("/products", () => new[] { "Product 1", "Product 2" })
     .RequireAuthorization()
