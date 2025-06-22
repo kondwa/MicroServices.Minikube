@@ -131,4 +131,4 @@ Each service includes Swagger UI for API documentation and testing:
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the Boost Software License 1.0 - see the LICENSE file for details.
